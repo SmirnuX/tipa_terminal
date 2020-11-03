@@ -1,9 +1,12 @@
 #include "tterm.h"
 
+int debug_mode=1;
+
 
 int main(int argc, char *argv[])
 {
 	char string[MAX_LENGTH];
+	char* command_cache[MAX_CACHED_COMMANDS];
 	char* command;
 	char **arg_vec;
 	int arg_count;
@@ -11,10 +14,22 @@ int main(int argc, char *argv[])
 	int i;
 	char is_word;
 	int is_in_bracket=0;
+	
+	controls_init();
+	tcsetattr(input, TCSANOW, &new_settings);
+	
 	while(1)
 	{
 		//Начало
+		tmp=getchar();
+		tcsetattr(input, TCSANOW, &default_settings);
+		printf("%X\n", tmp);
+		tcsetattr(input, TCSANOW, &new_settings);
+		continue;
 		printf("%s: >",getenv("PWD"));
+		
+		
+		
 		//Ввод строки
 		fgets(string, MAX_LENGTH, stdin);
 		
@@ -38,4 +53,9 @@ int main(int argc, char *argv[])
 		}
     }
 	return 0;
+}
+
+int control()
+{
+	return getc(stdin);
 }

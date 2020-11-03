@@ -1,4 +1,4 @@
-objects = tterm.c string_parser.c
+objects = tterm.c string_parser.c controls.c
 output = tterm
 
 all:
