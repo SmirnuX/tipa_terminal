@@ -1,5 +1,8 @@
+objects = tterm.c string_parser.c
+output = tterm
+
 all:
-	gcc tterm.c -o tterm
+	gcc $(objects) -o $(output)
 	
 sanitized: 
-	gcc tterm.c -o tterm -fsanitize=address
+	gcc $(objects) -o $(output) -fsanitize=address
