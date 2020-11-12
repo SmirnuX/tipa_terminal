@@ -15,6 +15,7 @@
 
 #define MAX_LENGTH 512
 #define MAX_ARGS 20 
+#define MAX_PATH_LENGTH 512
 
 //******Коды клавиш******
 #define CTRL_C		0x3
@@ -47,5 +48,7 @@ extern struct termios default_settings, new_settings;
 
 char* new_str_copy(char* source, int beginning, int end);	//Копирует символы из строки source с символа под номером beginning включительно до символа под номером end исключительно. Массив выделяется динамически в результате работы программы. Строка оканчивается нуль-символом. Возвращаемое значение - указатель на подстроку.
 char** string_parser(char* string, char* delim);	//Преобразует строку в вектор подстрок, разделенных символами из строки delim. Деление строки происходит с учетом кавычек. Вектор оканчивается NULL-указателем.
-int controls_init();	//Копирование начальных настроек терминала
+void kill_child(int param);
 
+//Различные команды
+int shell_cd(char* path, char** arg_vec);
