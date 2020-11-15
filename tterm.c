@@ -8,15 +8,14 @@ char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
 
 int main(int argc, char *argv[])
 {
+	const char* parser_strings[] = {"|","<",">","&&", NULL};	//Комбинации символов, которые требуют дополнительной обработки
 	char string[MAX_LENGTH];
 	char* command;
 	char **arg_vec;
-	int arg_count;
 	char tmp;
 	int i, j;
 	char is_word;
 	int is_in_bracket=0;
-	int selected_pipe=0;
 	char** temp_vec;
 	int pipe1[2], pipe2[2];
 	getcwd(path,MAX_PATH_LENGTH);
@@ -34,85 +33,116 @@ int main(int argc, char *argv[])
 		fgets(string, MAX_LENGTH, stdin);	//Ввод строки
 		arg_vec = string_parser(string, " \n");
 		i = 0;
-		arg_count=0;
+		int arg_count=0;
 		int parts=1;
 		int arg_beg=0;
-		int is_daemon=0;
-		selected_pipe=0;
-		//Парсим на предмет труб, демонов и выводов / вводов из файла
-		while(arg_vec[i]!=NULL)
+		
+		int selected_pipe=0;
+		struct IOConfig ioconfig;
+		//Ввод и вывод по умолчанию
+		
+		while(arg_vec[i]!=NULL)	//Парсинг строки
 		{
-			if (strcmp(arg_vec[i], "|")==0 || strcmp(arg_vec[i], ">")==0 ||strcmp(arg_vec[i], "&&")==0)
+			if (strcmp(arg_vec[i], "|")==0 || strcmp(arg_vec[i], ">")==0 ||strcmp(arg_vec[i], "&&")==0 || strcmp(arg_vec[i], "<")==0)
 			{
-				temp_vec=malloc(sizeof(char*)*(arg_count+1));
+				//Выделение подвектора вектора аргументов
+				temp_vec=malloc(sizeof(char*)*(arg_count+1));	
 				for (j=0; j<arg_count; j++)
 				{
 					temp_vec[j]=arg_vec[arg_beg+j];
 				}
-				temp_vec[arg_count]=NULL;
+				temp_vec[arg_count]=NULL;	//"Закрытие" подвектора
 				arg_count=0;
 				arg_beg=i+1;
 				command=temp_vec[0];
 				temp_vec[0]=path;
-				if (strcmp(arg_vec[i], "|")==0)
+				//Обнуление конфигурации ввода/вывода
+				ioconfig.in_desc=STDIN_FILENO;
+				ioconfig.out_desc=STDOUT_FILENO;
+				ioconfig.is_file_in=0;
+				ioconfig.is_file_out=0;
+				if (strcmp(arg_vec[i], "|")==0)	//Обработка труб
 				{
 					switch (selected_pipe)
 					{
 						case 0:	//Первая труба - перенаправление вывода в pipe1
 							pipe(pipe1);
-							execute_command(command, temp_vec, STDIN_FILENO, pipe1[1], -1);
+							ioconfig.out_desc=pipe1[1];
 							selected_pipe=1;
 							break;
 						case 1: //Четные трубы - чтение из pipe1, вывод в pipe2
 							pipe(pipe2);
-							execute_command(command, temp_vec, pipe1[0], pipe2[1], -1);
+							ioconfig.in_desc=pipe1[0];
+							ioconfig.out_desc=pipe2[1];
 							selected_pipe=2;
 							break;
 						case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
 							pipe(pipe1);
-							execute_command(command, temp_vec, pipe2[0], pipe1[1], -1);
+							ioconfig.in_desc=pipe2[0];
+							ioconfig.out_desc=pipe1[1];
 							selected_pipe=1;
 							break;
 					}
+					execute_command(command, temp_vec, ioconfig, 0);
 				}
-				else if (strcmp(arg_vec[i], "&&")==0)
+				else if (strcmp(arg_vec[i], "&&")==0)	//Обработка последовательных команд
 				{
 					switch (selected_pipe)
 					{
-						case 0:	//Первая труба - перенаправление вывода в pipe1
-							pipe(pipe1);
-							execute_command(command, temp_vec, STDIN_FILENO, STDOUT_FILENO, -1);
-							break;
-						case 1: //Четные трубы - чтение из pipe1, вывод в pipe2
-							execute_command(command, temp_vec, pipe1[0], STDOUT_FILENO, -1);
+						case 1: //Четные трубы - чтение из pipe1
+							ioconfig.in_desc=pipe1[0];
 							selected_pipe=0;
 							break;
-						case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
-							execute_command(command, temp_vec, pipe2[0], STDOUT_FILENO, -1);
+						case 2: //Нечетные трубы - чтение из pipe2
+							ioconfig.in_desc=pipe2[0];
 							selected_pipe=0;
 							break;
 					}
+					execute_command(command, temp_vec, ioconfig, 0);
 				}
-				else if (strcmp(arg_vec[i], ">")==0)
+				else if (strcmp(arg_vec[i], ">")==0)	//Вывод в файл
 				{
-					int out_file = open(arg_vec[i+1], O_CREAT, PERMISSION);
-					perror("");
-					//TODO - проверить на отсутствие i+1 и на отсутствие файла
+					int out_file = open(arg_vec[i+1], O_CREAT | O_WRONLY, PERMISSION);
+					//TODO - check for i+1 == NULL
+					i++;
+					arg_beg=i+1;
+					ioconfig.out_desc=out_file;
+					ioconfig.is_file_out=1;
 					switch (selected_pipe)
 					{
-						case 0:	//Нет трубы
-							execute_command(command, temp_vec, STDIN_FILENO, out_file, -1);
-							break;
 						case 1: 
-							execute_command(command, temp_vec, pipe1[0], out_file, -1);
+							ioconfig.in_desc=pipe1[0];
 							selected_pipe=0;
 							break;
-						case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
-							execute_command(command, temp_vec, pipe2[0], out_file, -1);
+						case 2: 
+							ioconfig.in_desc=pipe2[0];
 							selected_pipe=0;
 							break;
 					}
-					//close(out_file);
+					execute_command(command, temp_vec, ioconfig, 0);
+					close(out_file);
+				}
+				else if (strcmp(arg_vec[i], "<")==0)	//Вывод в файл
+				{
+					int in_file = open(arg_vec[i+1], O_RDONLY);
+					//TODO - check for i+1 == NULL
+					i++;
+					arg_beg=i+1;
+					ioconfig.in_desc=in_file;
+					ioconfig.is_file_in=1;
+					switch (selected_pipe)
+					{
+						case 1: 
+							ioconfig.in_desc=pipe1[0];
+							selected_pipe=0;
+							break;
+						case 2: 
+							ioconfig.in_desc=pipe2[0];
+							selected_pipe=0;
+							break;
+					}
+					execute_command(command, temp_vec, ioconfig, 0);
+					close(in_file);
 				}
 				free(temp_vec);
 			}
@@ -120,42 +150,52 @@ int main(int argc, char *argv[])
 			i++;
 		}
 		//Выполнение последней команды
-		//Поставить парсинг демонов
-		if (strcmp("&",arg_vec[i-1])==0)
+		if (arg_vec[arg_beg]!=NULL)
 		{
-			is_daemon=1;
-			arg_vec[i-1]=NULL;
-			for(i=0; i<MAX_JOBS_COUNT; i++)
+			int is_daemon=0;
+			if (strcmp("&",arg_vec[i-1])==0)	//Обработка демонов
 			{
-				//Проверка на уже закрытые фоновые процессы или еще не открытые
-				if (waitpid(jobs[i], NULL, WNOHANG)!=0 || strcmp(jobs_names[i],"")==0)
+				is_daemon=1;
+				arg_vec[i-1]=NULL;
+				for(i=0; i<MAX_JOBS_COUNT; i++)
 				{
-					strncpy(jobs_names[i], string, MAX_LENGTH);
-					break;
+					//Проверка на уже закрытые фоновые процессы или еще не открытые
+					if (waitpid(jobs[i], NULL, WNOHANG)!=0 || strcmp(jobs_names[i],"")==0)
+					{
+						strncpy(jobs_names[i], string, MAX_LENGTH);
+						break;
+					}
+				}
+				if (i == MAX_JOBS_COUNT)
+				{
+					printf("ERROR: There are too many running daemons already\n");
+					is_daemon = 0;
 				}
 			}
-			if (i == MAX_JOBS_COUNT)
+			command=arg_vec[arg_beg];
+			arg_vec[arg_beg]=path;
+			//Обнуление конфигурации ввода/вывода
+			ioconfig.in_desc=STDIN_FILENO;
+			ioconfig.out_desc=STDOUT_FILENO;
+			ioconfig.is_file_in=0;
+			ioconfig.is_file_out=0;
+			switch (selected_pipe)
 			{
-				printf("ERROR: There are too many running daemons already\n");
-				is_daemon = 0;
+				case 0:	//Команда без труб
+					execute_command(command, arg_vec, ioconfig, is_daemon*(i+1));
+					selected_pipe=1;
+					break;
+				case 1: //Четная труба
+					ioconfig.in_desc=pipe1[0];
+					execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
+					selected_pipe=2;
+					break;
+				case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
+					ioconfig.in_desc=pipe2[0];
+					execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
+					selected_pipe=1;
+					break;
 			}
-		}
-		command=arg_vec[arg_beg];
-		arg_vec[arg_beg]=path;
-		switch (selected_pipe)
-		{
-			case 0:	//Команда без труб
-				execute_command(command, arg_vec, STDIN_FILENO, STDOUT_FILENO, is_daemon*i);
-				selected_pipe=1;
-				break;
-			case 1: //Четная труба
-				execute_command(command, arg_vec + arg_beg, pipe1[0], STDOUT_FILENO, is_daemon*i);
-				selected_pipe=2;
-				break;
-			case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
-				execute_command(command, arg_vec + arg_beg, pipe2[0], STDOUT_FILENO, is_daemon*i);
-				selected_pipe=1;
-				break;
 		}
 		free(arg_vec);
     }
@@ -173,11 +213,11 @@ void kill_child(int param)
 
 void kill_parent(int param)
 {
-	printf("\n");
-	exit(0);
+	if (EXIT_ON_SIGNAL == 1)
+		shell_exit();
 }
 
-void execute_command(char* command, char** arg_vec, int pipe_in, int pipe_out, int daemon)
+void execute_command(char* command, char** arg_vec, struct IOConfig ioconfig, int daemon)
 {
 	//Проверка на встроенные команды
 	if (strcmp(command, "cd")==0)
@@ -216,41 +256,57 @@ void execute_command(char* command, char** arg_vec, int pipe_in, int pipe_out, i
 		}
 		return;	
 	}
+	else if (strcmp(command, "help")==0)
+	{
+		shell_help();
+		return;
+	}
+	else if (strcmp(command, "exit")==0)
+	{
+		shell_exit();
+		return;
+	}
 	//Раздвоение
 	int child=fork();
 	int child_state;
 	switch (child)
 	{
-		case 0:
-			if (pipe_in!=STDIN_FILENO)
+		case 0:	//Предок
+			if (ioconfig.in_desc!=STDIN_FILENO)
 			{
 				close(STDIN_FILENO);
-				dup(pipe_in);
+				dup(ioconfig.in_desc);
 			}
-			if (pipe_out!=STDOUT_FILENO)
+			if (ioconfig.out_desc!=STDOUT_FILENO)
 			{
 				close(STDOUT_FILENO);
-				dup(pipe_out);
-				perror("");
+				dup(ioconfig.out_desc);
 			}
 			if (execvp(command, arg_vec)==-1)
 			{
-				perror("");
+
 			}
 			return;
-		case -1:
+		case -1:	//Ошибка при раздвоении
 			printf("ERROR 404 - бляздец\n");
 			break;
-		default:
-			if (pipe_in!=STDIN_FILENO)
-				close(pipe_in);
-			if (pipe_out!=STDOUT_FILENO)
-				close(pipe_out);
+		default:	//Прардитель
+			if (ioconfig.in_desc!=STDIN_FILENO)
+				close(ioconfig.in_desc);
+			if (ioconfig.out_desc!=STDOUT_FILENO)
+				close(ioconfig.out_desc);
 			signal(SIGINT, kill_child);	//Перехватываем сигнал, идущий в предка
-			if (daemon==-1)
-				waitpid(child, &child_state, 0);
-			else if (daemon<MAX_JOBS_COUNT)
-				jobs[daemon]=child;
+			if (daemon==0)
+			{
+				waitpid(child, NULL, 0);
+				printf("Ende");
+			}
+			else if (daemon<MAX_JOBS_COUNT+1)
+			{
+				if (debug_mode==1)
+					printf("Created daemon #%i %s with pid [%i]\n", daemon, jobs_names[daemon-1], child);
+				jobs[daemon-1]=child;
+			}
 			signal(SIGINT, kill_parent);	//Возвращаем стандартное поведение при сигнале прерывания
 			break;
 	}

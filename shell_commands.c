@@ -22,3 +22,20 @@ void shell_kill(char* pid)
 {
 	kill(atoi(pid), SIGINT);
 }
+
+void shell_help()
+{
+	printf(	"*****TIPA TERMINAL*****\nBuilt-in commands:\n"
+			"cd <directory> - change directory\n"
+			"debug - change output to more detailed\n"
+			"exit - close terminal\n"
+			"jobs - print list of daemons\n"
+			"help - print some info about terminal\n"
+			"kill <process_id> - close process\n");
+}
+
+void shell_exit()
+{
+	printf("\n");
+	exit(0);
+}
