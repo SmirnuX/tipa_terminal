@@ -32,37 +32,18 @@ struct IOConfig
 	int is_file_out;	//Является ли канал вывода файлом?
 };
 
-/*
-Необходимые фичи:
- - Выполнение команд +
- - Раздвоение +
- - Обработка строк +
- - Закрытие процессов +
- - Демоны и список работ +
- - Обработка ошибок
- 
- - Собственная имплементация:
-	- cd +
-	- jobs +
-	- && +
-	- | +
-	- < +
-	- >  +
-	- help
-*/
-
 //tterm.c - основные подпрограммы
 void execute_command(char* command, char** arg_vec, struct IOConfig ioconfig, int daemon);
-void kill_child(int param);
-void kill_parent(int param);
+void kill_child(int param);	//Обработка сигнала для закрытия потомка
+void kill_parent(int param);	//Обработка сигнала для закрытия предка (если EXIT_ON_SIGNAL = 1) 
 
 //string_parser.c - разбор строки на лексемы
 char* new_str_copy(char* source, int beginning, int end);	//Копирует символы из строки source с символа под номером beginning включительно до символа под номером end исключительно. Массив выделяется динамически в результате работы программы. Строка оканчивается нуль-символом. Возвращаемое значение - указатель на подстроку.
 char** string_parser(char* string, char* delim);	//Преобразует строку в вектор подстрок, разделенных символами из строки delim. Деление строки происходит с учетом кавычек. Вектор оканчивается NULL-указателем.
 
 //shell_comands.c - Различные команды
-void shell_cd(char* path, char** arg_vec);
-void shell_jobs();
-void shell_kill(char* pid);
-void shell_help();
-void shell_exit();
+void shell_cd(char* path, char** arg_vec);	//Переход в другую директорию
+void shell_jobs(void);	//Вывод списка демонов
+void shell_kill(char* pid);	//Закрытие процесса
+void shell_help(void);	//Вывод небольшой справки
+void shell_exit(void);	//Закрытие терминала
