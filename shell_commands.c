@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "tterm.h"
 
-void shell_cd(char *path, char **arg_vec)	//Переход в другую директорию
+void shell_cd(char **arg_vec)	//Переход в другую директорию
 {
 	if (debug_mode == 1)
 		printf("Changed directory to %s\n", arg_vec[1]);
-	chdir(arg_vec[1]);
+	if (chdir(arg_vec[1]) == -1)
+		perror("");
 	getcwd(path, MAX_PATH_LENGTH);
-	perror("");
 }
 
 void shell_jobs(void)	//Вывод списка демонов
 {
 	for (int i = 0; i < MAX_JOBS_COUNT; i++)	{
-		if (strcmp(jobs_names[i], "") != 0)
-			printf("[%i] <%i> %s [%s]\n", i, jobs[i], jobs_names[i], (waitpid(jobs[i], NULL, WNOHANG) != 0)?"Closed":"Not closed");
+		if (strcmp(jobs_names[i], "") != 0) {
+			int ch_status, wp_status;
+
+			wp_status = waitpid(jobs[i], &ch_status, WNOHANG);
+			printf("[%i] <%i> %s [%s]\n", i, jobs[i], jobs_names[i], (WIFEXITED(ch_status) * wp_status != 0)?"Closed":"Not closed");
+		}
 	}
 }
 
@@ -44,4 +48,15 @@ void shell_exit(void)	//Закрытие терминала
 {
 	printf("\n");
 	exit(0);
+}
+
+void shell_debug(void)
+{
+	if (debug_mode == -1) {
+		printf("Debug mode ON\n");
+		debug_mode = 1;
+	} else {
+		printf("Debug mode OFF\n");
+		debug_mode = -1;
+	}
 }

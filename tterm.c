@@ -6,6 +6,7 @@ int debug_mode = -1;	//Включен ли режим отладки
 char path[MAX_PATH_LENGTH];
 pid_t jobs[MAX_JOBS_COUNT];
 char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
+char jobs_closed[MAX_JOBS_COUNT];
 
 int main(int argc, char *argv[])
 {
@@ -33,10 +34,11 @@ int main(int argc, char *argv[])
 	}
 	for (i = 0; i < MAX_JOBS_COUNT; i++)	//Заполняем список демонов пустыми значениями
 		strcpy(jobs_names[i], "");
+	printf("**** TIPA TERMINAL started*****\n");
 	while (1)	{
 		printf("%s: > ", path);
 		fgets(string, MAX_LENGTH, stdin);	//Ввод строки
-		arg_vec = string_parser(string, "\n");
+		arg_vec = string_parser(string, "\n ");
 		int arg_beg = 0;	//Начало подкоманды
 		int arg_count = 0;	//Количество аргументов подкоманды (включая нулевой аргумент)
 		int selected_pipe = 0;	//Выбранная труба
@@ -171,8 +173,11 @@ int main(int argc, char *argv[])
 				is_daemon = 1;
 				arg_vec[i-1] = NULL;
 				for (i = 0; i < MAX_JOBS_COUNT; i++)	{
+					int ch_status, wp_status;
+
+					wp_status = waitpid(jobs[i], &ch_status, WNOHANG);
 					//Проверка на уже закрытые фоновые процессы или еще не открытые
-					if (waitpid(jobs[i], NULL, WNOHANG) != 0 || strcmp(jobs_names[i], "") == 0)	{
+					if (WIFEXITED(ch_status) * wp_status != 0 || strcmp(jobs_names[i], "") == 0)	{
 						strncpy(jobs_names[i], string, MAX_LENGTH);
 						break;
 					}
@@ -215,7 +220,7 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 {
 	//Проверка на встроенные команды
 	if (strcmp(command, "cd") == 0)	{
-		shell_cd(path, arg_vec);
+		shell_cd(arg_vec);
 		return;
 	}	else if (strcmp(command, "jobs") == 0)	{
 		shell_jobs();
@@ -228,13 +233,7 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 		shell_kill(arg_vec[1]);
 		return;
 	}	else if (strcmp(command, "debug") == 0)	{
-		if (debug_mode == 0)	{
-			printf("Debug mode ON\n");
-			debug_mode = 1;
-		}	else	{
-			printf("Debug mode OFF\n");
-			debug_mode = 0;
-		}
+		shell_debug();
 		return;
 	}	else if (strcmp(command, "help") == 0)	{
 		shell_help();
@@ -257,10 +256,13 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 			close(STDOUT_FILENO);
 			dup(ioconfig.out_desc);
 		}
-		if (execvp(command, arg_vec) == -1)
+		if (execvp(command, arg_vec) == -1)	{
 			perror("Execution error: ");
+			exit(errno);
+		}
 		return;
 	case -1:	//Ошибка при раздвоении
+		perror("Fork error: ");
 		break;
 	default:	//Предок
 		if (ioconfig.in_desc != STDIN_FILENO)
@@ -272,9 +274,9 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 			waitpid(child, NULL, 0);
 			signal(SIGINT, kill_parent);	//Возвращаем стандартное поведение при сигнале прерывания
 		}	else if (daemon < MAX_JOBS_COUNT+1)	{
-			if (debug_mode == 1)
-				printf("Created daemon #%i %s with pid [%i]\n", daemon, jobs_names[daemon-1], child);
 			jobs[daemon-1] = child;
+			if (debug_mode == 1)
+				printf("Created daemon #%i %s with pid [%i]\n", daemon, jobs_names[daemon-1], jobs[daemon-1]);
 		}
 		break;
 	}
@@ -282,10 +284,6 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 
 void kill_child(int param)	//Обработка сигнала для закрытия потомка
 {
-	if (debug_mode == 1)
-		printf("\nClosed\n");
-	else
-		printf("\n");
 	signal(SIGINT, kill_parent);
 }
 

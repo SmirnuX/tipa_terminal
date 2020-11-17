@@ -19,8 +19,10 @@
 #define PERMISSION 0666
 #define EXIT_ON_SIGNAL 1
 
-extern int debug_mode, input, output;
+extern int debug_mode;
+extern char path[MAX_PATH_LENGTH];
 extern pid_t jobs[MAX_JOBS_COUNT];
+extern jobs_closed[MAX_JOBS_COUNT];
 extern char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
 extern struct termios default_settings, new_settings;
 
@@ -42,8 +44,9 @@ char* new_str_copy(char* source, int beginning, int end);	//Копирует с�
 char** string_parser(char* string, char* delim);	//Преобразует строку в вектор подстрок, разделенных символами из строки delim. Деление строки происходит с учетом кавычек. Вектор оканчивается NULL-указателем.
 
 //shell_comands.c - Различные команды
-void shell_cd(char* path, char** arg_vec);	//Переход в другую директорию
+void shell_cd(char** arg_vec);	//Переход в другую директорию
 void shell_jobs(void);	//Вывод списка демонов
 void shell_kill(char* pid);	//Закрытие процесса
 void shell_help(void);	//Вывод небольшой справки
 void shell_exit(void);	//Закрытие терминала
+void shell_debug(void);
