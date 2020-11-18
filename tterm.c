@@ -32,8 +32,10 @@ int main(int argc, char *argv[])
 		perror("Signal handler error: ");
 		return errno;
 	}
-	for (i = 0; i < MAX_JOBS_COUNT; i++)	//Заполняем список демонов пустыми значениями
+	for (i = 0; i < MAX_JOBS_COUNT; i++)	{	//Заполняем список демонов пустыми значениями
 		strcpy(jobs_names[i], "");
+		jobs_closed[i] = 1;
+	}
 	printf("**** TIPA TERMINAL started*****\n");
 	while (1)	{
 		printf("%s: > ", path);
@@ -62,7 +64,7 @@ int main(int argc, char *argv[])
 			temp_vec = malloc(sizeof(char *) * (arg_count+1));
 			if (temp_vec == NULL)	{
 				perror("Memory allocation error: ");
-				free(arg_vec);
+				free_arg_vec(arg_vec);
 				return errno;
 			}
 			for (j = 0; j < arg_count; j++)
@@ -82,7 +84,7 @@ int main(int argc, char *argv[])
 				case 0:	//Первая труба - перенаправление вывода в pipe1
 					if (pipe(pipe1) == -1)	{
 						perror("Pipe creating error: ");
-						free(arg_vec);
+						free_arg_vec(arg_vec);
 						free(temp_vec);
 						return errno;
 					}
@@ -92,7 +94,7 @@ int main(int argc, char *argv[])
 				case 1: //Четные трубы - чтение из pipe1, вывод в pipe2
 					if (pipe(pipe2) == -1)	{
 						perror("Pipe creating error: ");
-						free(arg_vec);
+						free_arg_vec(arg_vec);
 						free(temp_vec);
 						return errno;
 					}
@@ -103,7 +105,7 @@ int main(int argc, char *argv[])
 				case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
 					if (pipe(pipe1) == -1)	{
 						perror("Pipe creating error: ");
-						free(arg_vec);
+						free_arg_vec(arg_vec);
 						free(temp_vec);
 						return errno;
 					}
@@ -162,6 +164,7 @@ int main(int argc, char *argv[])
 				close(out_file);
 				break;
 			}
+			arg_vec[arg_beg] = command;
 			free(temp_vec);
 			arg_beg = i+1;
 		}
@@ -172,13 +175,12 @@ int main(int argc, char *argv[])
 			if (strcmp("&", arg_vec[i-1]) == 0)	{	//Обработка демонов
 				is_daemon = 1;
 				arg_vec[i-1] = NULL;
+				check_daemons();
 				for (i = 0; i < MAX_JOBS_COUNT; i++)	{
-					int ch_status, wp_status;
-
-					wp_status = waitpid(jobs[i], &ch_status, WNOHANG);
 					//Проверка на уже закрытые фоновые процессы или еще не открытые
-					if (WIFEXITED(ch_status) * wp_status != 0 || strcmp(jobs_names[i], "") == 0)	{
+					if (jobs_closed[i] == 1)	{
 						strncpy(jobs_names[i], string, MAX_LENGTH);
+						jobs_closed[i] = 0;
 						break;
 					}
 				}
@@ -210,8 +212,9 @@ int main(int argc, char *argv[])
 				selected_pipe = 1;
 				break;
 			}
+			arg_vec[arg_beg] = command;
 		}
-		free(arg_vec);
+		free_arg_vec(arg_vec);
 	}
 	return 0;
 }
@@ -258,6 +261,9 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 		}
 		if (execvp(command, arg_vec) == -1)	{
 			perror("Execution error: ");
+			if (daemon != 0)
+				jobs_closed[daemon - 1] = 1;
+			free(command);
 			exit(errno);
 		}
 		return;
@@ -275,6 +281,7 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 			signal(SIGINT, kill_parent);	//Возвращаем стандартное поведение при сигнале прерывания
 		}	else if (daemon < MAX_JOBS_COUNT+1)	{
 			jobs[daemon-1] = child;
+			jobs_closed[daemon-1] = 0;
 			if (debug_mode == 1)
 				printf("Created daemon #%i %s with pid [%i]\n", daemon, jobs_names[daemon-1], jobs[daemon-1]);
 		}
@@ -291,4 +298,31 @@ void kill_parent(int param)	//Обработка сигнала для закр�
 {
 	if (EXIT_ON_SIGNAL == 1)
 		shell_exit();
+}
+
+void check_daemons(void)	//Обновление статусов демонов
+{
+	int status;
+
+	for (int i = 0; i < MAX_JOBS_COUNT; i++)	{
+		if (strcmp(jobs_names[i], "") == 0 || jobs_closed[i] == 1)
+			continue;
+		pid_t return_pid = waitpid(jobs[i], &status, WNOHANG);
+
+		if (return_pid == -1)
+			perror("Daemon check error: ");
+		else if (return_pid == 0)
+			jobs_closed[i] = 0;
+		else if (return_pid == jobs[i])
+			jobs_closed[i] = 1;
+	}
+}
+
+void free_arg_vec(char **arg_vec)
+{
+	for (int i = 0; arg_vec[i] != NULL; i++)	{
+		printf("%i", i);
+		free(arg_vec[i]);
+	}
+	free(arg_vec);
 }

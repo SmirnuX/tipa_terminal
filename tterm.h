@@ -22,7 +22,7 @@
 extern int debug_mode;
 extern char path[MAX_PATH_LENGTH];
 extern pid_t jobs[MAX_JOBS_COUNT];
-extern jobs_closed[MAX_JOBS_COUNT];
+extern char jobs_closed[MAX_JOBS_COUNT];
 extern char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
 extern struct termios default_settings, new_settings;
 
@@ -38,6 +38,8 @@ struct IOConfig
 void execute_command(char* command, char** arg_vec, struct IOConfig ioconfig, int daemon);
 void kill_child(int param);	//Обработка сигнала для закрытия потомка
 void kill_parent(int param);	//Обработка сигнала для закрытия предка (если EXIT_ON_SIGNAL = 1) 
+void check_daemons(void);	//Обновление статусов демонов
+void free_arg_vec(char **arg_vec);	//Очистка памяти
 
 //string_parser.c - разбор строки на лексемы
 char* new_str_copy(char* source, int beginning, int end);	//Копирует символы из строки source с символа под номером beginning включительно до символа под номером end исключительно. Массив выделяется динамически в результате работы программы. Строка оканчивается нуль-символом. Возвращаемое значение - указатель на подстроку.

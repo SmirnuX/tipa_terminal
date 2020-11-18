@@ -12,13 +12,10 @@ void shell_cd(char **arg_vec)	//Переход в другую директор�
 
 void shell_jobs(void)	//Вывод списка демонов
 {
+	check_daemons();
 	for (int i = 0; i < MAX_JOBS_COUNT; i++)	{
-		if (strcmp(jobs_names[i], "") != 0) {
-			int ch_status, wp_status;
-
-			wp_status = waitpid(jobs[i], &ch_status, WNOHANG);
-			printf("[%i] <%i> %s [%s]\n", i, jobs[i], jobs_names[i], (WIFEXITED(ch_status) * wp_status != 0)?"Closed":"Not closed");
-		}
+		if (strcmp(jobs_names[i], "") != 0)
+			printf("[%i] <%i> %s [%s]\n", i, jobs[i], jobs_names[i], (jobs_closed[i] == 1)?"Closed":"Not closed");
 	}
 }
 
