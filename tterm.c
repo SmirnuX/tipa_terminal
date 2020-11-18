@@ -3,10 +3,11 @@
 #define _GNU_SOURCE
 
 int debug_mode = -1;	//Включен ли режим отладки
-char path[MAX_PATH_LENGTH];
-pid_t jobs[MAX_JOBS_COUNT];
-char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
-char jobs_closed[MAX_JOBS_COUNT];
+char path[MAX_PATH_LENGTH];	//Путь к текущей директории
+pid_t jobs[MAX_JOBS_COUNT];	//pid фоновых процессов
+char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];	//Список названий фоновых процессов
+char jobs_closed[MAX_JOBS_COUNT];	//Закрыты ли фоновые процессы
+
 
 int main(int argc, char *argv[])
 {
@@ -19,9 +20,11 @@ int main(int argc, char *argv[])
 	char is_word;
 	int is_in_bracket = 0;
 	char **temp_vec;
-	int pipe1[2], pipe2[2];
-	int fpipe[2];
+	int pipes[3][2];	//Трубы - стандартная, четная и нечетная
 	int temp_int = 0;
+
+	pipes[0][0] = STDIN_FILENO;
+	pipes[0][1] = STDOUT_FILENO;
 
 	errno = 0;
 	if (getcwd(path, MAX_PATH_LENGTH) == NULL)	{
@@ -44,6 +47,7 @@ int main(int argc, char *argv[])
 		int arg_beg = 0;	//Начало подкоманды
 		int arg_count = 0;	//Количество аргументов подкоманды (включая нулевой аргумент)
 		int selected_pipe = 0;	//Выбранная труба
+		int new_pipe = 0;
 		struct IOConfig ioconfig;	//Конфигурация каналов ввода и вывода
 
 		for (i = 0; arg_vec[i] != NULL; i++)	{	//Парсинг строки
@@ -80,40 +84,19 @@ int main(int argc, char *argv[])
 			ioconfig.is_file_out = 0;
 			switch (parsed_string)	{	//Обработка труб
 			case 0:	// '|' - трубы
-				switch (selected_pipe)	{
-				case 0:	//Первая труба - перенаправление вывода в pipe1
-					if (pipe(pipe1) == -1)	{
-						perror("Pipe creating error: ");
-						free_arg_vec(arg_vec);
-						free(temp_vec);
-						return errno;
-					}
-					ioconfig.out_desc = pipe1[1];
-					selected_pipe = 1;
-					break;
-				case 1: //Четные трубы - чтение из pipe1, вывод в pipe2
-					if (pipe(pipe2) == -1)	{
-						perror("Pipe creating error: ");
-						free_arg_vec(arg_vec);
-						free(temp_vec);
-						return errno;
-					}
-					ioconfig.in_desc = pipe1[0];
-					ioconfig.out_desc = pipe2[1];
-					selected_pipe = 2;
-					break;
-				case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
-					if (pipe(pipe1) == -1)	{
-						perror("Pipe creating error: ");
-						free_arg_vec(arg_vec);
-						free(temp_vec);
-						return errno;
-					}
-					ioconfig.in_desc = pipe2[0];
-					ioconfig.out_desc = pipe1[1];
-					selected_pipe = 1;
-					break;
+				if (selected_pipe == 0 || selected_pipe == 2)	//Нечетные трубы - чтение из pipe2 (или stdin), вывод в pipe1
+					new_pipe = 1;
+				else	//Четные трубы - чтение из pipe1, вывод в pipe2
+					new_pipe = 2;
+				if (pipe(pipes[new_pipe]) == -1)	{
+					perror("Pipe creating error: ");
+					free_arg_vec(arg_vec);
+					free(temp_vec);
+					return errno;
 				}
+				ioconfig.in_desc = pipes[selected_pipe][0];
+				ioconfig.out_desc = pipes[new_pipe][1];
+				selected_pipe = new_pipe;
 				break;
 			case 1:	// '<' - ввод из файла
 				if (arg_vec[i+1] == NULL)	{
@@ -144,15 +127,8 @@ int main(int argc, char *argv[])
 				ioconfig.is_file_out = 1;
 				break;
 			}
-			if (parsed_string >= 1 && parsed_string <= 3)	{	//'&&' - обработка последовательных команд
-				switch (selected_pipe)	{
-				case 1: //Четные трубы - чтение из pipe1
-					ioconfig.in_desc = pipe1[0];
-					break;
-				case 2: //Нечетные трубы - чтение из pipe2
-					ioconfig.in_desc = pipe2[0];
-					break;
-				}
+			if (parsed_string >= 2 && parsed_string <= 3)	{	//'&&' - обработка последовательных команд
+				ioconfig.in_desc = pipes[selected_pipe][0];
 				selected_pipe = 0;
 			}
 			execute_command(command, temp_vec, ioconfig, 0);
@@ -177,8 +153,7 @@ int main(int argc, char *argv[])
 				arg_vec[i-1] = NULL;
 				check_daemons();
 				for (i = 0; i < MAX_JOBS_COUNT; i++)	{
-					//Проверка на уже закрытые фоновые процессы или еще не открытые
-					if (jobs_closed[i] == 1)	{
+					if (jobs_closed[i] == 1)	{	//Проверка на уже закрытые фоновые процессы или еще не открытые
 						strncpy(jobs_names[i], string, MAX_LENGTH);
 						jobs_closed[i] = 0;
 						break;
@@ -192,26 +167,11 @@ int main(int argc, char *argv[])
 			command = arg_vec[arg_beg];
 			arg_vec[arg_beg] = path;
 			//Обнуление конфигурации ввода/вывода
-			ioconfig.in_desc = STDIN_FILENO;
+			ioconfig.in_desc = pipes[selected_pipe][0];
 			ioconfig.out_desc = STDOUT_FILENO;
 			ioconfig.is_file_in = 0;
 			ioconfig.is_file_out = 0;
-			switch (selected_pipe)	{
-			case 0:	//Команда без труб
-				execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
-				selected_pipe = 1;
-				break;
-			case 1: //Четная труба
-				ioconfig.in_desc = pipe1[0];
-				execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
-				selected_pipe = 2;
-				break;
-			case 2: //Нечетные трубы - чтение из pipe2, вывод в pipe1
-				ioconfig.in_desc = pipe2[0];
-				execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
-				selected_pipe = 1;
-				break;
-			}
+			execute_command(command, arg_vec + arg_beg, ioconfig, is_daemon*(i+1));
 			arg_vec[arg_beg] = command;
 		}
 		free_arg_vec(arg_vec);
@@ -222,28 +182,11 @@ int main(int argc, char *argv[])
 void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, int daemon)
 {
 	//Проверка на встроенные команды
-	if (strcmp(command, "cd") == 0)	{
-		shell_cd(arg_vec);
-		return;
-	}	else if (strcmp(command, "jobs") == 0)	{
-		shell_jobs();
-		return;
-	}	else if (strcmp(command, "kill") == 0)	{
-		if (arg_vec[1] == NULL)	{
-			printf("There are no arguments\n");
+	for (int i = 0; i < CMD_COUNT; i++)	{
+		if (strcmp(command, shell_cmd[i]) == 0)	{
+			shell_cmd_ptrs[i](arg_vec);
 			return;
 		}
-		shell_kill(arg_vec[1]);
-		return;
-	}	else if (strcmp(command, "debug") == 0)	{
-		shell_debug();
-		return;
-	}	else if (strcmp(command, "help") == 0)	{
-		shell_help();
-		return;
-	}	else if (strcmp(command, "exit") == 0)	{
-		shell_exit();
-		return;
 	}
 	//Раздвоение
 	int child = fork();
@@ -263,7 +206,8 @@ void execute_command(char *command, char **arg_vec, struct IOConfig ioconfig, in
 			perror("Execution error: ");
 			if (daemon != 0)
 				jobs_closed[daemon - 1] = 1;
-			free(command);
+			arg_vec[0] = command;
+			free_arg_vec(arg_vec);
 			exit(errno);
 		}
 		return;
@@ -297,7 +241,7 @@ void kill_child(int param)	//Обработка сигнала для закры
 void kill_parent(int param)	//Обработка сигнала для закрытия предка (если EXIT_ON_SIGNAL = 1)
 {
 	if (EXIT_ON_SIGNAL == 1)
-		shell_exit();
+		shell_exit(NULL);
 }
 
 void check_daemons(void)	//Обновление статусов демонов
@@ -320,9 +264,7 @@ void check_daemons(void)	//Обновление статусов демонов
 
 void free_arg_vec(char **arg_vec)
 {
-	for (int i = 0; arg_vec[i] != NULL; i++)	{
-		printf("%i", i);
+	for (int i = 0; arg_vec[i] != NULL; i++)
 		free(arg_vec[i]);
-	}
 	free(arg_vec);
 }

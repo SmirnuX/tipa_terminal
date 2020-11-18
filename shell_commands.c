@@ -1,16 +1,28 @@
 // SPDX-License-Identifier: CPOL-1.02
 #include "tterm.h"
 
+char *shell_cmd[CMD_COUNT] = {"cd", "debug", "exit", "jobs", "help", "kill"};
+void (*shell_cmd_ptrs[CMD_COUNT])(char **) = {shell_cd, shell_debug, shell_exit, shell_jobs, shell_help, shell_kill};
+
+
+
+
 void shell_cd(char **arg_vec)	//Переход в другую директорию
 {
+	if (arg_vec[1] == NULL)	{
+		printf("This program needs one argument to work.\n");
+		return;
+	}
+	if (chdir(arg_vec[1]) == -1)	{
+		perror("");
+		return;
+	}
 	if (debug_mode == 1)
 		printf("Changed directory to %s\n", arg_vec[1]);
-	if (chdir(arg_vec[1]) == -1)
-		perror("");
 	getcwd(path, MAX_PATH_LENGTH);
 }
 
-void shell_jobs(void)	//Вывод списка демонов
+void shell_jobs(char **arg_vec)	//Вывод списка демонов
 {
 	check_daemons();
 	for (int i = 0; i < MAX_JOBS_COUNT; i++)	{
@@ -19,12 +31,16 @@ void shell_jobs(void)	//Вывод списка демонов
 	}
 }
 
-void shell_kill(char *pid)	//Закрытие процесса
+void shell_kill(char **arg_vec)	//Закрытие процесса
 {
-	kill(atoi(pid), SIGINT);
+	if (arg_vec[1] == NULL)	{
+		printf("This program needs one argument to work.\n");
+		return;
+	}
+	kill(atoi(arg_vec[1]), SIGINT);
 }
 
-void shell_help(void)	//Вывод небольшой справки
+void shell_help(char **arg_vec)	//Вывод небольшой справки
 {
 	printf("*****TIPA TERMINAL*****\nBuilt-in commands:\n"
 			"cd <directory> - change directory\n"
@@ -41,13 +57,13 @@ void shell_help(void)	//Вывод небольшой справки
 			"| - output from command before \"|\" will go to input of command after \"|\"\n");
 }
 
-void shell_exit(void)	//Закрытие терминала
+void shell_exit(char **arg_vec)	//Закрытие терминала
 {
 	printf("\n");
 	exit(0);
 }
 
-void shell_debug(void)
+void shell_debug(char **arg_vec)
 {
 	if (debug_mode == -1) {
 		printf("Debug mode ON\n");

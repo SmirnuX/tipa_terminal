@@ -12,19 +12,20 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define MAX_LENGTH 512
-#define MAX_ARGS 20 
-#define MAX_PATH_LENGTH 512
-#define MAX_JOBS_COUNT 16
-#define PERMISSION 0666
-#define EXIT_ON_SIGNAL 1
+#define MAX_LENGTH 512	//Максимальная длина строки
+#define MAX_PATH_LENGTH 512	//Максимальная длина пути к текущей директории
+#define MAX_JOBS_COUNT 16	//Максимальное количество фоновых процессов
+#define PERMISSION 0666	//Разрешения для создаваемых файлов
+#define EXIT_ON_SIGNAL 1	//Выходить ли из терминала при получении сигнала SIGINT (если не запущен дочерний не фоновый процесс)
+#define CMD_COUNT 6	//Количество внутренних программ
 
 extern int debug_mode;
 extern char path[MAX_PATH_LENGTH];
 extern pid_t jobs[MAX_JOBS_COUNT];
 extern char jobs_closed[MAX_JOBS_COUNT];
 extern char jobs_names[MAX_JOBS_COUNT][MAX_LENGTH];
-extern struct termios default_settings, new_settings;
+extern char *shell_cmd[CMD_COUNT];
+extern void (*shell_cmd_ptrs[CMD_COUNT])(char **);
 
 struct IOConfig
 {
@@ -47,8 +48,8 @@ char** string_parser(char* string, char* delim);	//Преобразует стр
 
 //shell_comands.c - Различные команды
 void shell_cd(char** arg_vec);	//Переход в другую директорию
-void shell_jobs(void);	//Вывод списка демонов
-void shell_kill(char* pid);	//Закрытие процесса
-void shell_help(void);	//Вывод небольшой справки
-void shell_exit(void);	//Закрытие терминала
-void shell_debug(void);
+void shell_jobs(char **arg_vec);	//Вывод списка демонов
+void shell_kill(char **arg_vec);	//Закрытие процесса
+void shell_help(char **arg_vec);	//Вывод небольшой справки
+void shell_exit(char **arg_vec);	//Закрытие терминала
+void shell_debug(char **arg_vec);
