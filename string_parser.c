@@ -13,9 +13,9 @@ char *new_str_copy(char *source, int beginning, int end)
 			if (source[i-1] == '\\' && source[i] == '\"')
 				quotes++;
 	}
-	char *substr = malloc(end - beginning + 1 - quotes);
-
 	end_cpy -= quotes;
+	char *substr = malloc(end_cpy - beginning + 1);
+
 	for (int i = beginning; i < end_cpy || quotes > 0; i++)	{
 		substr[i-beginning] = source[i];
 		if (i > beginning)
