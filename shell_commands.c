@@ -39,6 +39,12 @@ void shell_kill(char **arg_vec)	//Закрытие процесса
 	}
 	kill(atoi(arg_vec[1]), SIGINT);
 	waitpid(atoi(arg_vec[1]), NULL, 0);
+	for (int i = 0; i < MAX_JOBS_COUNT; i++) {
+		if (jobs[i] == atoi(arg_vec[1])) {
+			jobs_closed[i] = 1;
+			break;
+		}
+	}
 }
 
 void shell_help(char **arg_vec)	//Вывод небольшой справки
