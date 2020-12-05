@@ -38,6 +38,7 @@ void shell_kill(char **arg_vec)	//Закрытие процесса
 		return;
 	}
 	kill(atoi(arg_vec[1]), SIGINT);
+	waitpid(atoi(arg_vec[1]), NULL, 0);
 }
 
 void shell_help(char **arg_vec)	//Вывод небольшой справки
