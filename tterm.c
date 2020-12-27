@@ -43,9 +43,7 @@ int main(int argc, char *argv[])
 	while (1)	{
 		printf("%s: > ", path);
 		if (fgets(string, MAX_LENGTH, stdin) == NULL)	//Ввод строки
-		{
 			shell_exit(NULL);
-		}
 		arg_vec = string_parser(string, "\n ");
 		int arg_beg = 0;	//Начало подкоманды
 		int arg_count = 0;	//Количество аргументов подкоманды (включая нулевой аргумент)
