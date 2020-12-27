@@ -42,7 +42,10 @@ int main(int argc, char *argv[])
 	printf("**** TIPA TERMINAL started*****\n");
 	while (1)	{
 		printf("%s: > ", path);
-		fgets(string, MAX_LENGTH, stdin);	//Ввод строки
+		if (fgets(string, MAX_LENGTH, stdin) == NULL)	//Ввод строки
+		{
+			shell_exit(NULL);
+		}
 		arg_vec = string_parser(string, "\n ");
 		int arg_beg = 0;	//Начало подкоманды
 		int arg_count = 0;	//Количество аргументов подкоманды (включая нулевой аргумент)
@@ -53,6 +56,7 @@ int main(int argc, char *argv[])
 		for (i = 0; arg_vec[i] != NULL; i++)	{	//Парсинг строки
 			int parsed_string = -1;	//Какая из строк массива parser_string[] найдена
 			int in_file, out_file;
+			int is_fine = 1;	//Проверка правильности открытия файлов
 
 			for (j = 0; parser_strings[j] != NULL; j++)	{
 				if (strcmp(arg_vec[i], parser_strings[j]) == 0)	{
@@ -101,12 +105,12 @@ int main(int argc, char *argv[])
 			case 1:	// '<' - ввод из файла
 				if (arg_vec[i+1] == NULL)	{
 					printf("Missing filename after \'<\'\n");
-					break;
+					is_fine = 0;
 				}
 				in_file = open(arg_vec[i+1], O_RDONLY);
 				if (in_file == -1)	{
 					perror("Input file error: ");
-					break;
+					is_fine = 0;
 				}
 				i++;
 				ioconfig.in_desc = in_file;
@@ -115,12 +119,12 @@ int main(int argc, char *argv[])
 			case 2:	// '>' - вывод в файл
 				if (arg_vec[i+1] == NULL)	{
 					printf("Missing filename after \'>\'\n");
-					break;
+					is_fine = 0;
 				}
 				out_file = open(arg_vec[i+1], O_CREAT | O_WRONLY, PERMISSION);
-				if (in_file == -1)	{
+				if (out_file == -1)	{
 					perror("Output file error: ");
-					break;
+					is_fine = 0;
 				}
 				i++;
 				ioconfig.out_desc = out_file;
@@ -131,7 +135,8 @@ int main(int argc, char *argv[])
 				ioconfig.in_desc = pipes[selected_pipe][0];
 				selected_pipe = 0;
 			}
-			execute_command(command, temp_vec, ioconfig, 0);
+			if (is_fine == 1)
+				execute_command(command, temp_vec, ioconfig, 0);
 			switch (parsed_string)	{	//Закрытие файлов
 			case 1:
 				close(in_file);
