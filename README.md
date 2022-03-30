@@ -1,6 +1,8 @@
 # tipa_terminal
-Простой аналог терминала
-Имеет поддержку следующих функций:
-  - Создание фоновых процессов с помощью & в конце строки, а также их просмотр и закрытие с помощью команд jobs и kill
-  - Ввод и вывод из/в файл(а) с помощью операторов < и >.
-  - Создание труб между программами с помощью оператора |.
+Simple terminal app.
+
+It has such features as:
+  - Launching background processes by adding `&` after command, viewing list of such processes by `list` command and killing them with command `kill`
+  - Getting input/output of command from/into file by operators `<` and `>`.
+  - Creating pipes between processes by `|` operator.
+
